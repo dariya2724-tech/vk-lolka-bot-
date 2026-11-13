@@ -1,7 +1,9 @@
 import requests
 import os
 from datetime import datetime
-import time
+from PIL import Image
+from io import BytesIO
+import json
 
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 VK_SERVICE_TOKEN = os.environ.get("VK_SERVICE_TOKEN")
@@ -28,6 +30,70 @@ def get_latest_post(group_id, token):
         return posts[0]
     return None
 
+def make_grid(image_urls):
+    """Создает красивую сетку (плитку) из картинок."""
+    images = []
+    for url in image_urls:
+        try:
+            res = requests.get(url, timeout=10)
+            res.raise_for_status()
+            img = Image.open(BytesIO(res.content))
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            images.append(img)
+        except Exception as e:
+            print(f"⚠️ Ошибка загрузки {url}: {e}")
+
+    if not images:
+        return None
+    
+    # Если картинка одна, возвращаем как есть
+    if len(images) == 1:
+        output = BytesIO()
+        images[0].save(output, format='JPEG', quality=85)
+        output.seek(0)
+        return output
+
+    # Размеры для сетки (две колонки)
+    padding = 10
+    col_width = 800 # Ширина одной колонки
+    total_width = col_width * 2 + padding * 3
+
+    # Масштабируем картинки под ширину колонки
+    resized_images = []
+    for img in images:
+        ratio = col_width / img.width
+        new_height = int(img.height * ratio)
+        img = img.resize((col_width, new_height), Image.Resampling.LANCZOS)
+        resized_images.append(img)
+
+    # Вычисляем высоту рядов
+    # Разбиваем картинки по 2 в ряд
+    rows = [resized_images[i:i+2] for i in range(0, len(resized_images), 2)]
+    
+    row_heights = []
+    for row in rows:
+        # Высота ряда = максимальная высота картинки в ряду
+        row_heights.append(max(img.height for img in row))
+
+    total_height = sum(row_heights) + padding * (len(rows) + 1)
+
+    # Создаем холст
+    grid = Image.new('RGB', (total_width, total_height), (35, 39, 42)) # Темный фон как в Lolka
+
+    y_offset = padding
+    for i, row in enumerate(rows):
+        x_offset = padding
+        for img in row:
+            grid.paste(img, (x_offset, y_offset))
+            x_offset += col_width + padding
+        y_offset += row_heights[i] + padding
+
+    output = BytesIO()
+    grid.save(output, format='JPEG', quality=90)
+    output.seek(0)
+    return output
+
 def send_to_lolka(post):
     post_id = post["id"]
     text = post.get("text", "Без текста")
@@ -42,8 +108,7 @@ def send_to_lolka(post):
 
     post_url = f"https://vk.com/wall-{post['owner_id']}_{post_id}"
 
-    # 1. Отправляем карточку с текстом и ПЕРВОЙ картинкой
-    payload_text = {
+    payload = {
         "content": f"🎣 **Новый пост в группе РР4!**\n{post_url}",
         "embeds": [{
             "description": text,
@@ -53,29 +118,34 @@ def send_to_lolka(post):
         }]
     }
 
+    files = {}
     if image_urls:
-        payload_text["embeds"][0]["image"] = {"url": image_urls[0]}
+        if len(image_urls) == 1:
+            payload["embeds"][0]["image"] = {"url": image_urls[0]}
+        else:
+            print(f"🖼️ Создаем сетку из {len(image_urls)} картинок...")
+            grid_stream = make_grid(image_urls)
+            if grid_stream:
+Image Editor - Free Online Photo Editor for Google Drive
+Image Editor - Free Online Photo Editor for Google Drive
+imageeditor.app
+
+
+= {"file": ("grid.jpg", grid_stream, "image/jpeg")}
+                payload["embeds"][0]["image"] = {"url": "attachment://grid.jpg"}
 
     try:
-        res = requests.post(WEBHOOK_URL, json=payload_text)
-        if res.status_code not in (200, 204):
-            print(f"❌ Ошибка Lolka (текст): {res.status_code} — {res.text}")
-            return False
+        if files:
+            res = requests.post(WEBHOOK_URL, data={"payload_json": json.dumps(payload)}, files=files)
+        else:
+            res = requests.post(WEBHOOK_URL, json=payload)
             
-        # 2. Если есть другие картинки, отправляем их по очереди отдельными сообщениями
-        if len(image_urls) > 1:
-            print(f"🖼️ Отправляем еще {len(image_urls)-1} картинок...")
-            for img_url in image_urls[1:]:
-                payload_img = {
-                    "content": "",
-                    "embeds": [{"image": {"url": img_url}}]
-                }
-                requests.post(WEBHOOK_URL, json=payload_img)
-                time.sleep(1) # Пауза, чтобы Lolka не выдала ошибку "слишком много запросов"
-        
-        print(f"✅ Пост #{post_id} и все картинки отправлены!")
-        return True
-        
+        if res.status_code in (200, 204):
+            print(f"✅ Пост #{post_id} отправлен!")
+            return True
+        else:
+            print(f"❌ Ошибка Lolka: {res.status_code} — {res.text}")
+            return False
     except Exception as e:
         print(f"❌ Ошибка сети: {e}")
         return False
@@ -112,4 +182,4 @@ def main():
         print(f"💤 Новых постов нет (последний в ВК: {post_id}, в памяти: {last_sent_id}).")
 
 if __name__ == "__main__":
-    main()
+    main() files
