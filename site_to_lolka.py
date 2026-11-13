@@ -15,9 +15,17 @@ SITE_JSON = "https://rr4farmtrof.com/assets/data/points-preview.json"
 BASE_URL = "https://rr4farmtrof.com"
 FILE = "last_site_post.txt"
  
-print("Bot started...")
+COLORS = {
+    "комариное": 0x2ECC71, "лосиное": 0x3498DB, "вьюнок": 0xE67E22,
+    "старый острог": 0x95A5A6, "белая": 0x9B59B6, "куори": 0x1ABC9C,
+    "медвежье": 0x8B4513, "волхов": 0x2980B9, "северский донец": 0x16A085,
+    "сура": 0xF1C40F, "ладожское озеро": 0x34495E, "янтарное": 0xF39C12,
+    "ладожский архипелаг": 0x2C3E50, "ахтуба": 0xE74C3C, "медное": 0xD35400,
+    "нижняя тунгуска": 0x7F8C8D, "яма": 0xBDC3C7, "норвежское море": 0x2980B9
+}
  
-headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+print("Bot started...")
+headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
 posts = None
  
 for attempt in range(3):
@@ -25,30 +33,23 @@ for attempt in range(3):
         r = requests.get(SITE_JSON, headers=headers, timeout=15)
         posts = r.json()
         break
-    except Exception as e:
-        print("Attempt failed:", e)
+    except:
         time.sleep(3)
  
-if not posts:
-    print("Site is not responding. Exiting.")
-    exit()
+if not posts: exit()
  
 last = 0
 if os.path.exists(FILE):
     with open(FILE, "r") as f:
-        try:
-            last = int(f.read().strip())
-        except:
-            pass
+        try: last = int(f.read().strip())
+        except: pass
  
 post = posts[0]
 pid = int(post.get("site_post_id"))
  
 if pid > last:
     print("New post found! ID:", pid)
-    
-    with open(FILE, "w") as f:
-        f.write(str(pid))
+    with open(FILE, "w") as f: f.write(str(pid))
         
     lake = post.get("display_lake", "Unknown").lower()
     point = post.get("location", "Unknown")
@@ -57,14 +58,16 @@ if pid > last:
         fish = post["fish_list"][0].get("name", "Unknown")
  
     target_webhook = DEFAULT_WEBHOOK
+    color = 0x9B59B6
+    
     if lake in WEBHOOKS:
         target_webhook = WEBHOOKS[lake]
-        print("Matched lake:", lake)
+        color = COLORS.get(lake, 0x9B59B6)
     else:
         for key, url in WEBHOOKS.items():
             if key in lake:
                 target_webhook = url
-                print("Matched lake:", key)
+                color = COLORS.get(key, 0x9B59B6)
                 break
  
     text = post.get("post_text", "")
@@ -72,25 +75,39 @@ if pid > last:
     
     if not bait and text:
         m = re.search(r'(Приманка|Наживка)[:\s]+([^\n]+)', text, re.IGNORECASE)
-        if m:
-            bait = m.group(2).strip()
-    if not bait:
-        bait = "См. комментарий"
+        if m: bait = m.group(2).strip()
+    if not bait: bait = "См. комментарий"
  
-    desc = f"📍 Локация: {lake.capitalize()}\n🎯 Точка: {point}\n🐟 Рыба: {fish}\n🪱 Приманка: {bait}\n"
+    embed = {
+        "title": f"🎣 {lake.capitalize()}",
+        "url": "https://rr4farmtrof.com/pages/points.php",
+        "color": color,
+        "author": {
+            "name": "RR4 Точки клёва",
+            "icon_url": "https://rr4farmtrof.com/favicon.ico"
+        },
+        "fields": [
+            {"name": "🎯 Точка", "value": f"`{point}`", "inline": True},
+            {"name": "🐟 Рыба", "value": f"**{fish}**", "inline": True},
+            {"name": "🪱 Приманка", "value": f"{bait}", "inline": False}
+        ],
+        "footer": {
+            "text": f"ID: {pid} | RR4FARMTROF.COM",
+            "icon_url": "https://rr4farmtrof.com/favicon.ico"
+        },
+        "timestamp": datetime.now().astimezone().isoformat()
+    }
+ 
+    # Обрезаем комментарий, чтобы не было "простыни"
     if text and "Комментарий" in text:
-        desc += f"\n💬 {text.split('Комментарий')[-1].strip()}"
+        comment = text.split('Комментарий')[-1].strip()
+        if len(comment) > 300:
+            comment = comment[:300] + "..."
+        embed["description"] = f"💬 *{comment}*"
  
     payload = {
-        "content": f"📌 Новая точка!\n🔎 {lake.capitalize()} | {fish}",
-        "embeds": [{
-            "title": "Открыть сайт",
-            "url": "https://rr4farmtrof.com/pages/points.php",
-            "description": desc,
-            "color": 65280,
-            "footer": {"text": f"ID: {pid}"},
-            "timestamp": datetime.now().astimezone().isoformat()
-        }]
+        "content": f"📌 **Новая точка!**",
+        "embeds": [embed]
     }
  
     imgs = post.get("photos", [])
@@ -105,11 +122,9 @@ if pid > last:
                     res_img = requests.get(img_url, timeout=5)
                     img_data = res_img.content
                     break
-                except:
-                    time.sleep(1)
+                except: time.sleep(1)
             
-            if not img_data:
-                raise Exception("Timeout")
+            if not img_data: continue
                 
             img = Image.open(BytesIO(img_data)).convert('RGB')
             w, h = img.size
@@ -127,19 +142,19 @@ if pid > last:
             print("Error image:", e)
  
     try:
+        # ВАЖНО: сначала отправляем карточку с текстом, а потом файлы!
         if files:
-            res = requests.post(target_webhook, data={"payload_json": json.dumps(payload)}, files=files, timeout=30)
+            requests.post(target_webhook, json=payload, timeout=20) # Сначала текст
+            time.sleep(1) # Небольшая пауза
+            requests.post(target_webhook, data={"payload_json": "{}"}, files=files, timeout=30) # Потом картинки
         else:
-            res = requests.post(target_webhook, json=payload, timeout=20)
+            requests.post(target_webhook, json=payload, timeout=20)
             
-        if res.status_code in (200, 204):
-            print("Success! Card sent:", pid)
-        else:
-            print("LOLKA ERROR:", res.status_code, res.text)
+        print("Success! Card sent:", pid)
     except Exception as e:
         print("Network error:", e)
  
 else:
-    print("No new posts. Last in memory:", last, "Last on site:", pid)
+    print("No new posts.")
  
 print("Done!")
