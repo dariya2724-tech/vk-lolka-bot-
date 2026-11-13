@@ -1,5 +1,6 @@
 import requests
 import os
+import re
 from datetime import datetime
 
 WEBHOOK_URL = os.environ["WEBHOOK_URL"]
@@ -32,7 +33,6 @@ try:
     if int(post_id) > last_sent_id:
         print(f"New site post! ID: {post_id}")
         
-        # Берем базовые данные
         lake = latest_post.get("display_lake", "Неизвестно")
         point = latest_post.get("location", "Неизвестно")
         
@@ -40,26 +40,36 @@ try:
         if latest_post.get("fish_list") and len(latest_post["fish_list"]) > 0:
             fish_name = latest_post["fish_list"][0].get("name", "Неизвестная рыба")
             
-        bait = latest_post.get("bait", "")
-        if not bait:
-            bait = "Не указана (см. текст ниже)"
-            
-        # Берем оригинальный текст поста, чтобы не терять детали
+        # Берем текст автора и пытаемся вытащить оттуда приманку
         original_text = latest_post.get("post_text", "")
+        bait = latest_post.get("bait", "")
+        
+        # Если в базе пусто, ищем в тексте слово "Приманка" или "Наживка"
+        if not bait and original_text:
+            match = re.search(r'(Приманка|Наживка|Блесна|Воблер)[:\s]+([^\n]+)', original_text, re.IGNORECASE)
+            if match:
+                bait = match.group(2).strip()
+        
+        if not bait:
+            bait = "См. комментарий ниже"
+            
+        # Оставляем только комментарий игрока (если есть)
+        comment_text = ""
         if original_text:
-            # Ограничиваем размер текста, чтобы Lolka не ругалась
-            original_text = original_text[:800] + "..." if len(original_text) > 800 else original_text
-            original_text = f"\n\n📝 **Текст автора:**\n{original_text}"
-        else:
-            original_text = ""
+            if "Комментарий" in original_text:
+                comment_text = original_text.split("Комментарий")[-1].strip()
+            elif "Всем НХНЧ" in original_text:
+                comment_text = original_text.split("Точка клева")[-1].strip()
         
         description = (
             f"📍 **Локация:** {lake}\n"
             f"🎯 **Точка:** {point}\n"
             f"🐟 **Рыба:** {fish_name}\n"
-            f"🪱 **Приманка (из базы):** {bait}"
-            f"{original_text}"
+            f"🪱 **Приманка:** {bait}\n"
         )
+        
+        if comment_text:
+            description += f"\n💬 **Комментарий:** {comment_text}"
         
         image_url = None
         if latest_post.get("photos") and len(latest_post["photos"]) > 0:
@@ -75,15 +85,16 @@ try:
                 "title": "Открыть страницу точек на сайте",
                 "url": "https://rr4farmtrof.com/pages/points.php",
                 "description": description,
-                "color": 65280, # Зеленый цвет
+                "color": 65280,
                 "footer": {"text": f"ID: {post_id}"},
                 "timestamp": datetime.now().astimezone().isoformat()
             }]
         }
 
-        # Вставляем картинку БЕЗ обрезки (как есть)
+        # Пытаемся обрезать картинку прямо через URL (убираем 15% снизу)
         if image_url:
-            payload["embeds"][0]["image"] = {"url": image_url}
+            cropped_url = f"https://images.weserv.nl/?url={image_url}&w=800&h=500&fit=cover&a=top"
+            payload["embeds"][0]["image"] = {"url": cropped_url}
 
         res = requests.post(WEBHOOK_URL, json=payload)
         if res.status_code in (200, 204):
