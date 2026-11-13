@@ -2,7 +2,7 @@ name: Site to Lolka Bot
 
 on:
   schedule:
-    - cron: '*/20 * * * *' # Запуск каждые 20 минут
+    - cron: '*/5 * * * *' # Запуск каждые 20 минут
   workflow_dispatch: # Позволяет запускать вручную
 
 jobs:
