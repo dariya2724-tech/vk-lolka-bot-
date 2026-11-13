@@ -31,7 +31,6 @@ def get_latest_post(group_id, token):
     return None
 
 def make_grid(image_urls):
-    """Создает красивую сетку (плитку) из картинок."""
     images = []
     for url in image_urls:
         try:
@@ -47,19 +46,16 @@ def make_grid(image_urls):
     if not images:
         return None
     
-    # Если картинка одна, возвращаем как есть
     if len(images) == 1:
         output = BytesIO()
         images[0].save(output, format='JPEG', quality=85)
         output.seek(0)
         return output
 
-    # Размеры для сетки (две колонки)
     padding = 10
-    col_width = 800 # Ширина одной колонки
+    col_width = 800
     total_width = col_width * 2 + padding * 3
 
-    # Масштабируем картинки под ширину колонки
     resized_images = []
     for img in images:
         ratio = col_width / img.width
@@ -67,19 +63,13 @@ def make_grid(image_urls):
         img = img.resize((col_width, new_height), Image.Resampling.LANCZOS)
         resized_images.append(img)
 
-    # Вычисляем высоту рядов
-    # Разбиваем картинки по 2 в ряд
     rows = [resized_images[i:i+2] for i in range(0, len(resized_images), 2)]
-    
     row_heights = []
     for row in rows:
-        # Высота ряда = максимальная высота картинки в ряду
         row_heights.append(max(img.height for img in row))
 
     total_height = sum(row_heights) + padding * (len(rows) + 1)
-
-    # Создаем холст
-    grid = Image.new('RGB', (total_width, total_height), (35, 39, 42)) # Темный фон как в Lolka
+    grid = Image.new('RGB', (total_width, total_height), (35, 39, 42))
 
     y_offset = padding
     for i, row in enumerate(rows):
@@ -93,8 +83,7 @@ def make_grid(image_urls):
     grid.save(output, format='JPEG', quality=90)
     output.seek(0)
     return output
-
-def send_to_lolka(post):
+    def send_to_lolka(post):
     post_id = post["id"]
     text = post.get("text", "Без текста")
     
@@ -126,12 +115,7 @@ def send_to_lolka(post):
             print(f"🖼️ Создаем сетку из {len(image_urls)} картинок...")
             grid_stream = make_grid(image_urls)
             if grid_stream:
-Image Editor - Free Online Photo Editor for Google Drive
-Image Editor - Free Online Photo Editor for Google Drive
-imageeditor.app
-
-
-= {"file": ("grid.jpg", grid_stream, "image/jpeg")}
+                files = {"file": ("grid.jpg", grid_stream, "image/jpeg")}
                 payload["embeds"][0]["image"] = {"url": "attachment://grid.jpg"}
 
     try:
@@ -182,4 +166,4 @@ def main():
         print(f"💤 Новых постов нет (последний в ВК: {post_id}, в памяти: {last_sent_id}).")
 
 if __name__ == "__main__":
-    main() files
+    main()
