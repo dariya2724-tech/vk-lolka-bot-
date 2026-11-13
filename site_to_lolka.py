@@ -66,13 +66,14 @@ for post in posts_to_check:
         desc = f"📍 Локация: {lake}\n🎯 Точка: {point}\n🐟 Рыба: {fish}\n🪱 Приманка: {bait}\n"
         if text and "Комментарий" in text:
             desc += f"\n💬 {text.split('Комментарий')[-1].strip()}"
-            
-        # Добавляем теги в самый низ
+
+        # Выносим теги в обычный текст (content), чтобы работал поиск
+        tag_text = ""
         if tag_lake or tag_fish:
-            desc += f"\n\n🏷️ {tag_lake} {tag_fish}"
+            tag_text = f"\n🏷️ {tag_lake} {tag_fish}"
 
         payload = {
-            "content": "📌 Новая точка!",
+            "content": f"📌 Новая точка!{tag_text}",
             "embeds": [{
                 "title": "Открыть сайт",
                 "url": "https://rr4farmtrof.com/pages/points.php",
