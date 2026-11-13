@@ -3,7 +3,7 @@ import os
 import json
 import re
 from datetime import datetime
-from PIL import Image
+from PIL import image
 from io import BytesIO
  
 WEBHOOK = os.environ["WEBHOOK_URL"]
