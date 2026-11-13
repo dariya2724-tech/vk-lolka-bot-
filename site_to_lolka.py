@@ -32,7 +32,7 @@ try:
     if int(post_id) > last_sent_id:
         print(f"New site post! ID: {post_id}")
         
-        # Берем данные из поста
+        # Берем базовые данные
         lake = latest_post.get("display_lake", "Неизвестно")
         point = latest_post.get("location", "Неизвестно")
         
@@ -40,20 +40,25 @@ try:
         if latest_post.get("fish_list") and len(latest_post["fish_list"]) > 0:
             fish_name = latest_post["fish_list"][0].get("name", "Неизвестная рыба")
             
-        # Ищем приманку во всех возможных полях, которые отдает сайт
         bait = latest_post.get("bait", "")
         if not bait:
-            bait = latest_post.get("lure", "")
-        if not bait:
-            bait = latest_post.get("bait_name", "")
-        if not bait:
-            bait = "Не указана"
+            bait = "Не указана (см. текст ниже)"
+            
+        # Берем оригинальный текст поста, чтобы не терять детали
+        original_text = latest_post.get("post_text", "")
+        if original_text:
+            # Ограничиваем размер текста, чтобы Lolka не ругалась
+            original_text = original_text[:800] + "..." if len(original_text) > 800 else original_text
+            original_text = f"\n\n📝 **Текст автора:**\n{original_text}"
+        else:
+            original_text = ""
         
         description = (
             f"📍 **Локация:** {lake}\n"
             f"🎯 **Точка:** {point}\n"
             f"🐟 **Рыба:** {fish_name}\n"
-            f"🪱 **Приманка:** {bait}\n"
+            f"🪱 **Приманка (из базы):** {bait}"
+            f"{original_text}"
         )
         
         image_url = None
@@ -76,11 +81,9 @@ try:
             }]
         }
 
+        # Вставляем картинку БЕЗ обрезки (как есть)
         if image_url:
-            # Используем сервис wsrv.nl для обрезки нижней части (убираем красный баннер)
-            # 0,0,100,85 означает: обрезать снизу 15% картинки
-            cropped_url = f"https://wsrv.nl/?url={image_url}&crop=0,0,100,85"
-            payload["embeds"][0]["image"] = {"url": cropped_url}
+            payload["embeds"][0]["image"] = {"url": image_url}
 
         res = requests.post(WEBHOOK_URL, json=payload)
         if res.status_code in (200, 204):
