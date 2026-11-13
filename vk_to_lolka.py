@@ -2,7 +2,6 @@ import requests
 import os
 from datetime import datetime
 
-# Берем токены из переменных окружения (в GitHub они называются Secrets)
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 VK_SERVICE_TOKEN = os.environ.get("VK_SERVICE_TOKEN")
 VK_GROUP_DOMAIN = "rr4pepper"
@@ -21,13 +20,11 @@ def get_group_id(domain, token):
 
 def get_latest_post(group_id, token):
     url = "https://api.vk.com/method/wall.get"
-    # Берем сразу 5 постов, чтобы точно захватить реальные новые, а не только закреп
     params = {"owner_id": -group_id, "count": 5, "access_token": token, "v": "5.131"}
     response = requests.get(url, params=params).json()
     
     if "response" in response and response["response"]["items"]:
         posts = response["response"]["items"]
-        # Сортируем по дате (сначала самые новые). Закрепленный пост улетит в конец списка.
         posts.sort(key=lambda x: x["date"], reverse=True)
         return posts[0]
     else:
@@ -36,43 +33,47 @@ def get_latest_post(group_id, token):
 
 def send_to_lolka(post):
     post_id = post["id"]
+    # Берем оригинальный текст без изменений, чтобы сохранить смайлики и переносы
     text = post.get("text", "Без текста")
-    if len(text) > 1000:
-        text = text[:1000] + "..."
-        
-    post_url = f"https://vk.com/wall-{post['owner_id']}_{post_id}"
-    image_url = None
     
+    # Собираем все картинки из поста
+    image_urls = []
     if "attachments" in post:
         for attach in post["attachments"]:
             if attach["type"] == "photo":
+                # Берем максимальное разрешение для каждой фотки
                 sizes = attach["photo"]["sizes"]
                 max_size = max(sizes, key=lambda x: x["width"])
-                image_url = max_size["url"]
-                break
+                image_urls.append(max_size["url"])
 
+    post_url = f"https://vk.com/wall-{post['owner_id']}_{post_id}"
+
+    # Формируем карточку (первую картинку делаем обложкой)
     payload = {
-        "content": "🎣 **Новый пост в группе РР4!**",
+        "content": f"🎣 **Новый пост в группе РР4!**\n{post_url}",
         "embeds": [{
-            "title": "Нажмите, чтобы открыть пост ВК",
-            "url": post_url,
             "description": text,
-            "color": 3447003,
+            "color": 3447003, # Синий цвет
             "footer": {"text": "Группа rr4pepper"},
             "timestamp": datetime.now().astimezone().isoformat()
         }]
     }
 
-    if image_url:
-        payload["embeds"][0]["image"] = {"url": image_url}
+    # Если есть картинки, первую вешаем в Embed
+    if image_urls:
+        payload["embeds"][0]["image"] = {"url": image_urls[0]}
+        
+        # Если картинок больше одной, остальные добавляем в attachments (они будут сеткой)
+        if len(image_urls) > 1:
+            payload["attachments"] = [{"url": url} for url in image_urls[1:]]
 
     try:
         res = requests.post(WEBHOOK_URL, json=payload)
         if res.status_code in (200, 204):
-            print(f"✅ Пост #{post_id} отправлен!")
+            print(f"✅ Пост #{post_id} отправлен со всеми картинками!")
             return True
         else:
-            print(f"❌ Ошибка Lolka: {res.status_code}")
+            print(f"❌ Ошибка Lolka: {res.status_code} — {res.text}")
             return False
     except Exception as e:
         print(f"❌ Ошибка сети: {e}")
@@ -93,7 +94,6 @@ def main():
     post_id = latest_post["id"]
     last_sent_id = 0
     
-    # Читаем ID последнего поста
     if os.path.exists(LAST_POST_FILE):
         with open(LAST_POST_FILE, "r") as f:
             try:
@@ -101,11 +101,9 @@ def main():
             except ValueError:
                 pass
 
-    # Сравниваем ID
     if post_id > last_sent_id:
         print(f"🆕 Новый пост! ID: {post_id}")
         if send_to_lolka(latest_post):
-            # Записываем новый ID
             with open(LAST_POST_FILE, "w") as f:
                 f.write(str(post_id))
             print("💾 ID сохранен.")
