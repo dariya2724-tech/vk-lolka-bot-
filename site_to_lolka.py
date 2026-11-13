@@ -1,7 +1,10 @@
 import requests
 import os
 import re
+import json
 from datetime import datetime
+from PIL import Image
+from io import BytesIO
 
 WEBHOOK_URL = os.environ["WEBHOOK_URL"]
 SITE_URL = "https://rr4farmtrof.com/assets/data/points-preview.json"
@@ -40,11 +43,9 @@ try:
         if latest_post.get("fish_list") and len(latest_post["fish_list"]) > 0:
             fish_name = latest_post["fish_list"][0].get("name", "Неизвестная рыба")
             
-        # Берем текст автора и пытаемся вытащить оттуда приманку
         original_text = latest_post.get("post_text", "")
         bait = latest_post.get("bait", "")
         
-        # Если в базе пусто, ищем в тексте слово "Приманка" или "Наживка"
         if not bait and original_text:
             match = re.search(r'(Приманка|Наживка|Блесна|Воблер)[:\s]+([^\n]+)', original_text, re.IGNORECASE)
             if match:
@@ -53,13 +54,10 @@ try:
         if not bait:
             bait = "См. комментарий ниже"
             
-        # Оставляем только комментарий игрока (если есть)
         comment_text = ""
         if original_text:
             if "Комментарий" in original_text:
                 comment_text = original_text.split("Комментарий")[-1].strip()
-            elif "Всем НХНЧ" in original_text:
-                comment_text = original_text.split("Точка клева")[-1].strip()
         
         description = (
             f"📍 **Локация:** {lake}\n"
@@ -71,13 +69,14 @@ try:
         if comment_text:
             description += f"\n💬 **Комментарий:** {comment_text}"
         
-        image_url = None
+        # Собираем ВСЕ картинки
+        image_urls = []
         if latest_post.get("photos") and len(latest_post["photos"]) > 0:
-            photo_path = latest_post["photos"][0]
-            if photo_path.startswith("/"):
-                image_url = SITE_BASE_URL + photo_path
-            else:
-                image_url = photo_path
+            for photo_path in latest_post["photos"]:
+                if photo_path.startswith("/"):
+                    image_urls.append(SITE_BASE_URL + photo_path)
+                else:
+                    image_urls.append(photo_path)
 
         payload = {
             "content": "📌 **Новая точка клёва на сайте!**",
@@ -91,12 +90,43 @@ try:
             }]
         }
 
-        # Пытаемся обрезать картинку прямо через URL (убираем 15% снизу)
-        if image_url:
-            cropped_url = f"https://images.weserv.nl/?url={image_url}&w=800&h=500&fit=cover&a=top"
-            payload["embeds"][0]["image"] = {"url": cropped_url}
+        files = {}
+        attachments = []
+        
+        # Скачиваем все картинки, отрезаем баннеры (если они есть)
+        for i, url in enumerate(image_urls):
+            try:
+                res_img = requests.get(url, timeout=10)
+                img = Image.open(BytesIO(res_img.content))
+                if img.mode != 'RGB':
+                    img = img.convert('RGB')
+                
+                # Обрезаем нижние 15% (баннер)
+                width, height = img.size
+                crop_height = int(height * 0.85)
+                cropped_img = img.crop((0, 0, width, crop_height))
+                
+                output = BytesIO()
+                cropped_img.save(output, format='JPEG', quality=90)
+                output.seek(0)
+                
+                files[f"files[{i}]"] = (f"image_{i}.jpg", output, "image/jpeg")
+                
+                # Первую картинку делаем обложкой карточки
+                if i == 0:
+                    payload["embeds"][0]["image"] = {"url": f"attachment://image_{i}.jpg"}
+            except Exception as
 
-        res = requests.post(WEBHOOK_URL, json=payload)
+
+:
+                print(f"Не удалось обработать картинку {url}: {e}")
+
+        # Отправляем всё вместе
+        if files:
+            res = requests.post(WEBHOOK_URL, data={"payload_json": json.dumps(payload)}, files=files)
+        else:
+            res = requests.post(WEBHOOK_URL, json=payload)
+            
         if res.status_code in (200, 204):
             print(f"Site post #{post_id} sent!")
             with open(LAST_SITE_POST_FILE, "w") as f:
@@ -107,4 +137,4 @@ try:
         print(f"No new site posts (last {post_id}).")
 
 except Exception as e:
-    print(f"Error: {e}")
+    print(f"Error: {e}") e
