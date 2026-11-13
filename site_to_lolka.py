@@ -68,17 +68,37 @@ payload = {
     }]
 }
 
+# Собираем все картинки
 imgs = post.get("photos", [])
-if imgs:
-    p = imgs[0]
+img_urls = []
+for p in imgs:
     img_url = BASE_URL + p if p.startswith("/") else p
-    # Ограничиваем высоту картинки, чтобы она не была огромной
-    payload["embeds"][0]["image"] = {"url": img_url, "height": 350}
+    img_urls.append(img_url)
+
+# Первую картинку ставим в саму карточку
+if img_urls:
+    payload["embeds"][0]["image"] = {"url": img_urls[0]}
 
 try:
+    # 1. Отправляем карточку с текстом и первой картинкой
     res = requests.post(WEBHOOK, json=payload, timeout=20)
+    
     if res.status_code in (200, 204):
-        print(f"Success! Post {pid} sent.")
+        print(f"Success! Card {pid} sent.")
+        
+        # 2. Если есть другие картинки, отправляем их пачкой (сеткой)
+        if len(img_urls) > 1:
+            print(f"Sending {len(img_urls)-1} more images...")
+            files = {}
+            for i, url in enumerate(img_urls[1:]):
+                files[f"files[{i}]"] = (f"img_{i}.jpg", requests.get(url).content, "image/jpeg")
+            
+            # Отправляем пустой payload, чтобы Lolka просто показала картинки сеткой
+            res_imgs = requests.post(WEBHOOK, data={"payload_json": "{}"}, files=files, timeout=20)
+            if res_imgs.status_code not in (200, 204):
+                print("Error sending images grid:", res_imgs.status_code, res_imgs.text)
+        
+        # Сохраняем ID, чтобы не отправлять снова
         with open(FILE, "w") as f:
             f.write(str(pid))
     else:
