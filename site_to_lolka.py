@@ -3,6 +3,8 @@ import os
 import json
 import re
 from datetime import datetime
+from PIL import Image
+from io import BytesIO
 
 WEBHOOK = os.environ["WEBHOOK_URL"]
 SITE_JSON = "https://rr4farmtrof.com/assets/data/points-preview.json"
@@ -30,9 +32,7 @@ if os.path.exists(FILE):
         except:
             pass
 
-# Берем последние 10 постов для проверки
 posts_to_check = posts[:10]
-# Переворачиваем, чтобы отправлять от старых к новым
 posts_to_check.reverse()
 
 new_posts_sent = 0
@@ -59,21 +59,12 @@ for post in posts_to_check:
         if not bait:
             bait = "См. комментарий"
 
-        # Создаем теги (убираем пробелы)
-        tag_lake = f"#{lake.replace(' ', '')}" if lake and lake != "Unknown" else ""
-        tag_fish = f"#{fish.replace(' ', '')}" if fish and fish != "Unknown" else ""
-
         desc = f"📍 Локация: {lake}\n🎯 Точка: {point}\n🐟 Рыба: {fish}\n🪱 Приманка: {bait}\n"
         if text and "Комментарий" in text:
             desc += f"\n💬 {text.split('Комментарий')[-1].strip()}"
 
-        # Выносим теги в обычный текст (content), чтобы работал поиск
-        tag_text = ""
-        if tag_lake or tag_fish:
-            tag_text = f"\n🏷️ {tag_lake} {tag_fish}"
-
         payload = {
-            "content": f"📌 Новая точка!{tag_text}",
+            "content": f"📌 Новая точка!\n🔎 {lake} | {fish}",
             "embeds": [{
                 "title": "Открыть сайт",
                 "url": "https://rr4farmtrof.com/pages/points.php",
@@ -85,27 +76,43 @@ for post in posts_to_check:
         }
 
         imgs = post.get("photos", [])
-        img_urls = []
-        for p in imgs:
+        files = {}
+        
+        # Скачиваем и обрабатываем все картинки
+        for i, p in enumerate(imgs):
             img_url = BASE_URL + p if p.startswith("/") else p
-            img_urls.append(img_url)
-
-        if img_urls:
-            payload["embeds"][0]["image"] = {"url": img_urls[0]}
+            try:
+                # Скачиваем
+                res_img = requests.get(img_url, timeout=10)
+                img = Image.open(BytesIO(res_img.content)).convert('RGB')
+                
+                # Обрезаем нижние 15% (убираем красный баннер)
+                w, h = img.size
+                img = img.crop((0, 0, w, int(h * 0.85)))
+                
+                # Сохраняем в память
+                output = BytesIO()
+                img.save(output, format='JPEG', quality=95) # Высокое качество
+                output.seek(0)
+                
+                files[f"files[{i}]"] = (f"img_{i}.jpg", output, "image/jpeg")
+                
+                # Первую картинку ставим в карточку
+                if i == 0:
+                    payload["embeds"][0]["image"] = {"url": f"attachment://img_{i}.jpg"}
+            except Exception as e:
+                print(f"Error processing image {img_url}: {e}")
 
         try:
-            res = requests.post(WEBHOOK, json=payload, timeout=20)
+            # Если есть картинки, отправляем как multipart/form-data
+            if files:
+                res = requests.post(WEBHOOK, data={"payload_json": json.dumps(payload)}, files=files, timeout=30)
+            else:
+                res = requests.post(WEBHOOK, json=payload, timeout=20)
+                
             if res.status_code in (200, 204):
                 print(f"Success! Card {pid} sent.")
                 new_posts_sent += 1
-                
-                # Отправляем остальные картинки сеткой
-                if len(img_urls) > 1:
-                    files = {}
-                    for i, url in enumerate(img_urls[1:]):
-                        files[f"files[{i}]"] = (f"img_{i}.jpg", requests.get(url).content, "image/jpeg")
-                    requests.post(WEBHOOK, data={"payload_json": "{}"}, files=files, timeout=20)
-                
                 last = pid
             else:
                 print("Lolka error:", res.status_code, res.text)
@@ -115,6 +122,6 @@ for post in posts_to_check:
 if new_posts_sent > 0:
     with open(FILE, "w") as f:
         f.write(str(last))
-    print(f"Done! Sent {new_posts_sent} new posts. Last ID: {last}")
+    print(f"Done! Sent {new_posts_sent} posts.")
 else:
     print("No new posts.")
