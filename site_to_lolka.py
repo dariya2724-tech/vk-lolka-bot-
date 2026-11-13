@@ -72,9 +72,8 @@ imgs = post.get("photos", [])
 if imgs:
     p = imgs[0]
     img_url = BASE_URL + p if p.startswith("/") else p
-    # ВОТ ЗДЕСЬ МЫ ОБРЕЗАЕМ КАРТИНКУ (убираем нижние 15%)
-    cropped_url = f"https://wsrv.nl/?url={img_url}&crop=0,0,100,85"
-    payload["embeds"][0]["image"] = {"url": cropped_url}
+    # Ограничиваем высоту картинки, чтобы она не была огромной
+    payload["embeds"][0]["image"] = {"url": img_url, "height": 350}
 
 try:
     res = requests.post(WEBHOOK, json=payload, timeout=20)
