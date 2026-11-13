@@ -1,7 +1,8 @@
-import requests, os, json, re
+import requests
+import os
+import json
+import re
 from datetime import datetime
-from PIL import Image
-from io import BytesIO
 
 WEBHOOK = os.environ["WEBHOOK_URL"]
 SITE_JSON = "https://rr4farmtrof.com/assets/data/points-preview.json"
@@ -67,31 +68,15 @@ payload = {
     }]
 }
 
-files = {}
 imgs = post.get("photos", [])
-
-for i, p in enumerate(imgs):
-    url = BASE_URL + p if p.startswith("/") else p
-    try:
-        ri = requests.get(url, timeout=5)
-        img = Image.open(BytesIO(ri.content)).convert('RGB')
-        w, h = img.size
-        img = img.crop((0, 0, w, int(h * 0.85)))
-        out = BytesIO()
-        img.save(out, format='JPEG', quality=90)
-        out.seek(0)
-        files[f"files[{i}]"] = (f"img_{i}.jpg", out, "image/jpeg")
-        if i == 0:
-            payload["embeds"][0]["image"] = {"url": f"attachment://img_{i}.jpg"}
-    except Exception as e:
-        print("Skip img:", e)
+if imgs:
+    # Берем просто первую ссылку на картинку без скачивания
+    p = imgs[0]
+    img_url = BASE_URL + p if p.startswith("/") else p
+    payload["embeds"][0]["image"] = {"url": img_url}
 
 try:
-    if files:
-        res = requests.post(WEBHOOK, data={"payload_json": json.dumps(payload)}, files=files, timeout=20)
-    else:
-        res = requests.post(WEBHOOK, json=payload, timeout=20)
-        
+    res = requests.post(WEBHOOK, json=payload, timeout=20)
     if res.status_code in (200, 204):
         print(f"Success! Post {pid} sent.")
         with open(FILE, "w") as f:
