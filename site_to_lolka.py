@@ -3,6 +3,7 @@ os.system("pip install Pillow")
 import requests
 import json
 import re
+import time
 from datetime import datetime
 from PIL import Image
 from io import BytesIO
@@ -22,17 +23,24 @@ FILE = "last_site_post.txt"
  
 print("Bot started...")
  
-try:
-    r = requests.get(SITE_JSON, timeout=15)
-    posts = r.json()
-except Exception as e:
-    print("Site error:", e)
-    exit()
+# Защита от сбоев: притворяемся браузером и пробуем 3 раза
+headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+posts = None
+ 
+for attempt in range(3):
+    try:
+        r = requests.get(SITE_JSON, headers=headers, timeout=15)
+        posts = r.json()
+        break
+    except Exception as e:
+        print(f"Attempt {attempt+1} failed: {e}")
+        time.sleep(3)
  
 if not posts:
-    print("No data.")
+    print("Site is not responding. Exiting.")
     exit()
  
+# Читаем память
 last = 0
 if os.path.exists(FILE):
     with open(FILE, "r") as f:
@@ -132,5 +140,7 @@ for post in posts_to_check:
                 print("Lolka error:", res.status_code, res.text)
         except Exception as e:
             print("Network error:", e)
+        
+        time.sleep(2)
  
 print(f"Done! Sent {new_posts_sent} posts.")
