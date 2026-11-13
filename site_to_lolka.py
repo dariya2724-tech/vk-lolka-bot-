@@ -78,36 +78,24 @@ if pid > last:
         if m: bait = m.group(2).strip()
     if not bait: bait = "См. комментарий"
  
-    embed = {
-        "title": f"🎣 {lake.capitalize()}",
-        "url": "https://rr4farmtrof.com/pages/points.php",
-        "color": color,
-        "author": {
-            "name": "RR4 Точки клёва",
-            "icon_url": "https://rr4farmtrof.com/favicon.ico"
-        },
-        "fields": [
-            {"name": "🎯 Точка", "value": f"`{point}`", "inline": True},
-            {"name": "🐟 Рыба", "value": f"**{fish}**", "inline": True},
-            {"name": "🪱 Приманка", "value": f"{bait}", "inline": False}
-        ],
-        "footer": {
-            "text": f"ID: {pid} | RR4FARMTROF.COM",
-            "icon_url": "https://rr4farmtrof.com/favicon.ico"
-        },
-        "timestamp": datetime.now().astimezone().isoformat()
-    }
- 
-    # Обрезаем комментарий, чтобы не было "простыни"
+    desc = f"**Точка:** `{point}`\n**Рыба:** **{fish}**\n**Приманка:** {bait}\n"
+    
     if text and "Комментарий" in text:
         comment = text.split('Комментарий')[-1].strip()
-        if len(comment) > 300:
-            comment = comment[:300] + "..."
-        embed["description"] = f"💬 *{comment}*"
+        if len(comment) > 300: comment = comment[:300] + "..."
+        desc += f"\n💬 *{comment}*"
  
+    # Упрощенный, но красивый Embed
     payload = {
         "content": f"📌 **Новая точка!**",
-        "embeds": [embed]
+        "embeds": [{
+            "title": f"🎣 {lake.capitalize()}",
+            "url": "https://rr4farmtrof.com/pages/points.php",
+            "description": desc,
+            "color": color,
+            "footer": {"text": f"ID: {pid} | RR4FARMTROF.COM"},
+            "timestamp": datetime.now().astimezone().isoformat()
+        }]
     }
  
     imgs = post.get("photos", [])
@@ -142,15 +130,15 @@ if pid > last:
             print("Error image:", e)
  
     try:
-        # ВАЖНО: сначала отправляем карточку с текстом, а потом файлы!
         if files:
-            requests.post(target_webhook, json=payload, timeout=20) # Сначала текст
-            time.sleep(1) # Небольшая пауза
-            requests.post(target_webhook, data={"payload_json": "{}"}, files=files, timeout=30) # Потом картинки
+            res = requests.post(target_webhook, data={"payload_json": json.dumps(payload)}, files=files, timeout=30)
         else:
-            requests.post(target_webhook, json=payload, timeout=20)
+            res = requests.post(target_webhook, json=payload, timeout=20)
             
-        print("Success! Card sent:", pid)
+        if res.status_code in (200, 204):
+            print("Success! Card sent:", pid)
+        else:
+            print("LOLKA ERROR:", res.status_code, res.text)
     except Exception as e:
         print("Network error:", e)
  
