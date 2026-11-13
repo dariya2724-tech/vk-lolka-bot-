@@ -109,7 +109,8 @@ elif len(image_urls) > 1:
         grid.save(output, format='JPEG', quality=90)
         output.seek(0)
         
-        files = {"file": ("grid.jpg", output, "image/jpeg")}
+        # ИСПРАВЛЕНО: Lolka ожидает поля files[0], files[1] и т.д.
+        files = {"files[0]": ("grid.jpg", output, "image/jpeg")}
         data_to_send["embeds"][0]["image"] = {"url": "attachment://grid.jpg"}
  
 try:
