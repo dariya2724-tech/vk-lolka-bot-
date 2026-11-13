@@ -22,7 +22,6 @@ if not posts:
     print("No data.")
     exit()
 
-# Читаем последний сохраненный ID
 last = 0
 if os.path.exists(FILE):
     with open(FILE, "r") as f:
@@ -31,10 +30,9 @@ if os.path.exists(FILE):
         except:
             pass
 
-# Берем последние 10 постов с сайта для проверки
+# Берем последние 10 постов для проверки
 posts_to_check = posts[:10]
-
-# Переворачиваем список, чтобы отправлять от самого старого к новому (хронологический порядок)
+# Переворачиваем, чтобы отправлять от старых к новым
 posts_to_check.reverse()
 
 new_posts_sent = 0
@@ -42,7 +40,6 @@ new_posts_sent = 0
 for post in posts_to_check:
     pid = int(post.get("site_post_id"))
     
-    # Если пост новее, чем сохраненный в памяти — отправляем
     if pid > last:
         print(f"New post found! ID: {pid}")
         
@@ -54,6 +51,7 @@ for post in posts_to_check:
 
         text = post.get("post_text", "")
         bait = post.get("bait", "")
+        
         if not bait and text:
             m = re.search(r'(Приманка|Наживка)[:\s]+([^\n]+)', text, re.IGNORECASE)
             if m:
@@ -61,9 +59,17 @@ for post in posts_to_check:
         if not bait:
             bait = "См. комментарий"
 
+        # Создаем теги (убираем пробелы)
+        tag_lake = f"#{lake.replace(' ', '')}" if lake and lake != "Unknown" else ""
+        tag_fish = f"#{fish.replace(' ', '')}" if fish and fish != "Unknown" else ""
+
         desc = f"📍 Локация: {lake}\n🎯 Точка: {point}\n🐟 Рыба: {fish}\n🪱 Приманка: {bait}\n"
         if text and "Комментарий" in text:
             desc += f"\n💬 {text.split('Комментарий')[-1].strip()}"
+            
+        # Добавляем теги в самый низ
+        if tag_lake or tag_fish:
+            desc += f"\n\n🏷️ {tag_lake} {tag_fish}"
 
         payload = {
             "content": "📌 Новая точка!",
@@ -92,20 +98,19 @@ for post in posts_to_check:
                 print(f"Success! Card {pid} sent.")
                 new_posts_sent += 1
                 
+                # Отправляем остальные картинки сеткой
                 if len(img_urls) > 1:
                     files = {}
                     for i, url in enumerate(img_urls[1:]):
                         files[f"files[{i}]"] = (f"img_{i}.jpg", requests.get(url).content, "image/jpeg")
                     requests.post(WEBHOOK, data={"payload_json": "{}"}, files=files, timeout=20)
                 
-                # Обновляем ID, чтобы в следующий раз не отправлять этот пост снова
                 last = pid
             else:
                 print("Lolka error:", res.status_code, res.text)
         except Exception as e:
             print("Network error:", e)
 
-# Сохраняем самый последний ID в память
 if new_posts_sent > 0:
     with open(FILE, "w") as f:
         f.write(str(last))
