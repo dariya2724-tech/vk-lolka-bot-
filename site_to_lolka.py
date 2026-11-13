@@ -47,10 +47,19 @@ if pid > last:
         fish = post["fish_list"][0].get("name", "Unknown")
  
     target_webhook = DEFAULT_WEBHOOK
-    color = 0x2F3136
+    color = 0x2F3136 # Темно-серый (без зеленой рамки)
     
-    if lake in WEBHOOKS:
-        target_webhook = WEBHOOKS[lake]
+    # Умный поиск канала (ищет ключевое слово внутри названия)
+    found_channel = False
+    for key, url in WEBHOOKS.items():
+        if key in lake:
+            target_webhook = url
+            found_channel = True
+            print(f"Matched lake '{key}'. Sending to specific channel.")
+            break
+    
+    if not found_channel:
+        print(f"No specific channel for '{lake}'. Sending to DEFAULT.")
  
     text = post.get("post_text", "")
     bait = post.get("bait", "")
@@ -64,6 +73,7 @@ if pid > last:
  
     desc = f"📍 **Локация:** {lake.capitalize()}\n🎯 **Точка:** `{point}`\n🐟 **Рыба:** {fish}\n🪱 **Приманка:** {bait}\n"
     
+    # ПОЛНЫЙ текст комментария (без обрезки)
     if text and "Комментарий" in text:
         comment = text.split('Комментарий')[-1].strip()
         desc += f"\n💬 *{comment}*"
