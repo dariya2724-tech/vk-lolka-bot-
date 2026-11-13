@@ -49,7 +49,7 @@ if pid > last:
     target_webhook = DEFAULT_WEBHOOK
     color = 0x2F3136 # Темно-серый (без зеленой рамки)
     
-    # Умный поиск канала (ищет ключевое слово внутри названия)
+    # Умный поиск канала
     found_channel = False
     for key, url in WEBHOOKS.items():
         if key in lake:
@@ -71,9 +71,9 @@ if pid > last:
     if not bait:
         bait = "См. комментарий"
  
+    # Формируем ПОЛНЫЙ текст без обрезки
     desc = f"📍 **Локация:** {lake.capitalize()}\n🎯 **Точка:** `{point}`\n🐟 **Рыба:** {fish}\n🪱 **Приманка:** {bait}\n"
     
-    # ПОЛНЫЙ текст комментария (без обрезки)
     if text and "Комментарий" in text:
         comment = text.split('Комментарий')[-1].strip()
         desc += f"\n💬 *{comment}*"
@@ -110,6 +110,7 @@ if pid > last:
                 
             img = Image.open(BytesIO(img_data)).convert('RGB')
             w, h = img.size
+            # Обрезаем красный баннер
             img = img.crop((0, 0, w, int(h * 0.90)))
             
             output = BytesIO()
@@ -124,15 +125,25 @@ if pid > last:
             print("Error image:", e)
  
     try:
-        if files:
-            res = requests.post(target_webhook, data={"payload_json": json.dumps(payload)}, files=files, timeout=30)
+        # 1. Сначала отправляем ТЕКСТ (карточку)
+        res_text = requests.post(target_webhook, json=payload, timeout=20)
+        
+        if res_text.status_code not in (200, 204):
+            print("LOLKA ERROR (text):", res_text.status_code, res_text.text)
         else:
-            res = requests.post(target_webhook, json=payload, timeout=20)
+            # 2. Если есть картинки, отправляем их ВТОРЫМ сообщением
+            if files:
+                time.sleep(2) # Пауза, чтобы текст встал первым
+                # Для картинок убираем текст из payload, чтобы они шли отдельной сеткой
+                img_payload = {"content": "", "embeds": [{"image": {"url": f"attachment://{list(files.keys())[0].replace('files[', 'img_').replace(']', '')}.jpg"}}]}
+                # Проще отправить просто файлы
+                res_imgs = requests.post(target_webhook, files=files, timeout=30)
+                
+                if res_imgs.status_code not in (200, 204):
+                    print("LOLKA ERROR (images):", res_imgs.status_code, res_imgs.text)
             
-        if res.status_code in (200, 204):
             print("Success! Card sent:", pid)
-        else:
-            print("LOLKA ERROR:", res.status_code, res.text)
+            
     except Exception as e:
         print("Network error:", e)
  
