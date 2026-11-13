@@ -2,6 +2,8 @@ import requests
 import os
 import json
 from datetime import datetime
+from PIL import Image
+from io import BytesIO
 
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 VK_SERVICE_TOKEN = os.environ.get("VK_SERVICE_TOKEN")
@@ -69,12 +71,61 @@ payload = {
     }]
 }
 
-if image_urls:
+files = {}
+if len(image_urls) == 1:
     payload["embeds"][0]["image"] = {"url": image_urls[0]}
+elif len(image_urls) > 1:
+    print(f"🖼️ Склеиваем {len(image_urls)} картинок в сетку...")
+    images = []
+    for url in image_urls:
+        try:
+            res_img = requests.get(url, timeout=10)
+            img = Image.open(BytesIO(res_img.content))
+            if img.mode != 'RGB':
+                img = img.convert('RGB')
+            images.append(img)
+        except Exception as e:
+            print(f"⚠️ Ошибка картинки: {e}")
+
+    if len(images) > 1:
+        padding = 10
+        col_width = 800
+        total_width = col_width * 2 + padding * 3
+        resized = []
+        for img in images:
+            ratio = col_width / img.width
+            new_height = int(img.height * ratio)
+            resized.append(img.resize((col_width, new_height), Image.Resampling.LANCZOS))
+        
+        rows = [resized[i:i+2] for i in range(0, len(resized), 2)]
+        row_heights = [max(img.height for img in row) for row in rows]
+        total_height = sum(row_heights) + padding * (len(rows) + 1)
+        
+        grid = Image.new('RGB', (total_width, total_height), (35, 39, 42))
+        y_offset = padding
+        for i, row in enumerate(rows):
+            x_offset = padding
+            for img in row:
+                grid.paste(img, (x_offset, y_offset))
+                x_offset += col_width + padding
+            y_offset += row_heights[i] + padding
+            
+        output = BytesIO()
+        grid.save(output, format='JPEG', quality=90)
+        output.seek(0)
+        
+        files = {"file": ("grid.jpg", output, "image/jpeg")}
+        payload["embeds"][0]["image"] = {"url": "attachment://grid.jpg"}
 
 # 6. Отправляем в Lolka
 try:
-    res = requests.post(WEBHOOK_URL, json=payload)
+    if files:
+        res = requests.post(WEBHOOK_URL, data={"payload_json": json.dumps(payload)}, files=files)
+    else:
+
+
+es = requests.post(WEBHOOK_URL, json=payload)
+        
     if res.status_code in (200, 204):
         print(f"✅ Пост #{post_id} успешно отправлен!")
         with open(LAST_POST_FILE, "w") as f:
@@ -82,4 +133,4 @@ try:
     else:
         print(f"❌ Ошибка Lolka: {res.status_code} — {res.text}")
 except Exception as e:
-    print(f"❌ Ошибка сети: {e}")
+    print(f"❌ Ошибка сети: {e}") r
