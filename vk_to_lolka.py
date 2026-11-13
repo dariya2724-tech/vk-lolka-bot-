@@ -21,10 +21,15 @@ def get_group_id(domain, token):
 
 def get_latest_post(group_id, token):
     url = "https://api.vk.com/method/wall.get"
-    params = {"owner_id": -group_id, "count": 1, "access_token": token, "v": "5.131"}
+    # Берем сразу 5 постов, чтобы точно захватить реальные новые, а не только закреп
+    params = {"owner_id": -group_id, "count": 5, "access_token": token, "v": "5.131"}
     response = requests.get(url, params=params).json()
+    
     if "response" in response and response["response"]["items"]:
-        return response["response"]["items"][0]
+        posts = response["response"]["items"]
+        # Сортируем по дате (сначала самые новые). Закрепленный пост улетит в конец списка.
+        posts.sort(key=lambda x: x["date"], reverse=True)
+        return posts[0]
     else:
         print(f"❌ Ошибка постов: {response}")
         return None
@@ -96,6 +101,7 @@ def main():
             except ValueError:
                 pass
 
+    # Сравниваем ID
     if post_id > last_sent_id:
         print(f"🆕 Новый пост! ID: {post_id}")
         if send_to_lolka(latest_post):
@@ -104,7 +110,7 @@ def main():
                 f.write(str(post_id))
             print("💾 ID сохранен.")
     else:
-        print("💤 Новых постов нет.")
+        print(f"💤 Новых постов нет (последний в ВК: {post_id}, в памяти: {last_sent_id}).")
 
 if __name__ == "__main__":
     main()
