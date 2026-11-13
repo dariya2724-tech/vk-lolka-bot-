@@ -1,6 +1,7 @@
 import requests
 import os
 from datetime import datetime
+import time
 
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL")
 VK_SERVICE_TOKEN = os.environ.get("VK_SERVICE_TOKEN")
@@ -41,6 +42,7 @@ def send_to_lolka(post):
 
     post_url = f"https://vk.com/wall-{post['owner_id']}_{post_id}"
 
+    # 1. Отправляем карточку с текстом и ПЕРВОЙ картинкой
     payload_text = {
         "content": f"🎣 **Новый пост в группе РР4!**\n{post_url}",
         "embeds": [{
@@ -60,16 +62,18 @@ def send_to_lolka(post):
             print(f"❌ Ошибка Lolka (текст): {res.status_code} — {res.text}")
             return False
             
+        # 2. Если есть другие картинки, отправляем их по очереди отдельными сообщениями
         if len(image_urls) > 1:
-            print("🖼️ Отправляем остальные картинки сеткой...")
-            payload_images = {
-                "attachments": [{"url": url} for url in image_urls[1:]]
-            }
-            res_images = requests.post(WEBHOOK_URL, json=payload_images)
-            if res_images.status_code not in (200, 204):
-                print(f"⚠️ Не удалось отправить сетку картинок (возможно, Lolka не поддерживает).")
+            print(f"🖼️ Отправляем еще {len(image_urls)-1} картинок...")
+            for img_url in image_urls[1:]:
+                payload_img = {
+                    "content": "",
+                    "embeds": [{"image": {"url": img_url}}]
+                }
+                requests.post(WEBHOOK_URL, json=payload_img)
+                time.sleep(1) # Пауза, чтобы Lolka не выдала ошибку "слишком много запросов"
         
-        print(f"✅ Пост #{post_id} отправлен!")
+        print(f"✅ Пост #{post_id} и все картинки отправлены!")
         return True
         
     except Exception as e:
