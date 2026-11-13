@@ -115,7 +115,7 @@ try:
                 # Первую картинку делаем обложкой карточки
                 if i == 0:
                     payload["embeds"][0]["image"] = {"url": f"attachment://image_{i}.jpg"}
-            except Exception as
+            except Exception as e:
 
 
 :
