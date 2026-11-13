@@ -6,25 +6,33 @@ import re
 from datetime import datetime
 from PIL import Image
 from io import BytesIO
-
-WEBHOOK = os.environ["WEBHOOK_URL"]
+ 
+# Твой основной вебхук (куда будут падать посты, если водоем не найден)
+DEFAULT_WEBHOOK = os.environ["WEBHOOK_URL"]
+ 
+# Вебхуки для конкретных водоемов
+WEBHOOKS = {
+    "комариное": "https://lolka.app/api/webhooks/964904755430400/OTY0OTA0NzU1NDMwNDAw.oL-wEVATLHshhRR2fhfIPC_umnzrh18M1guytMfrFWE",
+    "лосиное": "https://lolka.app/api/webhooks/964905542928384/OTY0OTA1NTQyOTI4Mzg0.4ZlzqvIllCbDSBubSe7C4n_w3cpyJlxQyMr6cpDHCA8"
+}
+ 
 SITE_JSON = "https://rr4farmtrof.com/assets/data/points-preview.json"
 BASE_URL = "https://rr4farmtrof.com"
 FILE = "last_site_post.txt"
-
+ 
 print("Bot started...")
-
+ 
 try:
     r = requests.get(SITE_JSON, timeout=15)
     posts = r.json()
 except Exception as e:
     print("Site error:", e)
     exit()
-
+ 
 if not posts:
     print("No data.")
     exit()
-
+ 
 last = 0
 if os.path.exists(FILE):
     with open(FILE, "r") as f:
@@ -32,28 +40,36 @@ if os.path.exists(FILE):
             last = int(f.read().strip())
         except:
             pass
-
+ 
 posts_to_check = posts[:10]
 posts_to_check.reverse()
-
+ 
 new_posts_sent = 0
-
+ 
 for post in posts_to_check:
     pid = int(post.get("site_post_id"))
     
     if pid > last:
-        print("New post found! ID:", pid)
+        print(f"New post found! ID: {pid}")
         
         # СРАЗУ записываем ID в файл перед отправкой
         with open(FILE, "w") as f:
             f.write(str(pid))
             
-        lake = post.get("display_lake", "Unknown")
+        lake = post.get("display_lake", "Unknown").lower()
         point = post.get("location", "Unknown")
         fish = "Unknown"
         if post.get("fish_list"):
             fish = post["fish_list"][0].get("name", "Unknown")
-
+ 
+        # Ищем, в какой канал отправить
+        target_webhook = DEFAULT_WEBHOOK
+        for key, url in WEBHOOKS.items():
+            if key in lake:
+                target_webhook = url
+                print(f"Matched lake '{key}'. Sending to specific channel.")
+                break
+ 
         text = post.get("post_text", "")
         bait = post.get("bait", "")
         
@@ -63,13 +79,13 @@ for post in posts_to_check:
                 bait = m.group(2).strip()
         if not bait:
             bait = "См. комментарий"
-
-        desc = f"📍 Локация: {lake}\n🎯 Точка: {point}\n🐟 Рыба: {fish}\n🪱 Приманка: {bait}\n"
+ 
+        desc = f"📍 Локация: {lake.capitalize()}\n🎯 Точка: {point}\n🐟 Рыба: {fish}\n🪱 Приманка: {bait}\n"
         if text and "Комментарий" in text:
             desc += f"\n💬 {text.split('Комментарий')[-1].strip()}"
-
+ 
         payload = {
-            "content": f"📌 Новая точка!\n🔎 {lake} | {fish}",
+            "content": f"📌 Новая точка!\n🔎 {lake.capitalize()} | {fish}",
             "embeds": [{
                 "title": "Открыть сайт",
                 "url": "https://rr4farmtrof.com/pages/points.php",
@@ -79,7 +95,7 @@ for post in posts_to_check:
                 "timestamp": datetime.now().astimezone().isoformat()
             }]
         }
-
+ 
         imgs = post.get("photos", [])
         files = {}
         
@@ -102,19 +118,19 @@ for post in posts_to_check:
                     payload["embeds"][0]["image"] = {"url": f"attachment://img_{i}.jpg"}
             except Exception as e:
                 print("Error image:", e)
-
+ 
         try:
             if files:
-                res = requests.post(WEBHOOK, data={"payload_json": json.dumps(payload)}, files=files, timeout=30)
+                res = requests.post(target_webhook, data={"payload_json": json.dumps(payload)}, files=files, timeout=30)
             else:
-                res = requests.post(WEBHOOK, json=payload, timeout=20)
+                res = requests.post(target_webhook, json=payload, timeout=20)
                 
             if res.status_code in (200, 204):
-                print("Success! Card sent:", pid)
+                print(f"Success! Card {pid} sent.")
                 new_posts_sent += 1
             else:
                 print("Lolka error:", res.status_code, res.text)
         except Exception as e:
             print("Network error:", e)
-
-print("Done! Sent", new_posts_sent, "posts.")
+ 
+print(f"Done! Sent {new_posts_sent} posts.")
