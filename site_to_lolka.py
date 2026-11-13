@@ -3,6 +3,7 @@ os.system("pip install Pillow")
 import requests
 import json
 import re
+import time
 from datetime import datetime
 from PIL import Image
 from io import BytesIO
@@ -44,6 +45,10 @@ for post in posts_to_check:
     if pid > last:
         print(f"New post found! ID: {pid}")
         
+        # СРАЗУ записываем ID в файл перед отправкой!
+        with open(FILE, "w") as f:
+            f.write(str(pid))
+            
         lake = post.get("display_lake", "Unknown")
         point = post.get("location", "Unknown")
         fish = "Unknown"
@@ -85,9 +90,8 @@ for post in posts_to_check:
                 res_img = requests.get(img_url, timeout=10)
                 img = Image.open(BytesIO(res_img.content)).convert('RGB')
                 
-                # Обрезаем баннер снизу (если он есть)
                 w, h = img.size
-                img = img.crop((0, 0, w, int(h * 0.90))) # Оставляем 90% высоты
+                img = img.crop((0, 0, w, int(h * 0.90)))
                 
                 output = BytesIO()
                 img.save(output, format='JPEG', quality=95)
@@ -95,7 +99,6 @@ for post in posts_to_check:
                 
                 files[f"files[{i}]"] = (f"img_{i}.jpg", output, "image/jpeg")
                 
-                # Первую картинку ставим в карточку
                 if i == 0:
                     payload["embeds"][0]["image"] = {"url": f"attachment://img_{i}.jpg"}
             except Exception as e:
@@ -110,15 +113,12 @@ for post in posts_to_check:
             if res.status_code in (200, 204):
                 print(f"Success! Card {pid} sent.")
                 new_posts_sent += 1
-                last = pid
             else:
                 print("Lolka error:", res.status_code, res.text)
         except Exception as e:
             print("Network error:", e)
+            
+        # Пауза 2 секунды между постами
+        time.sleep(2)
 
-if new_posts_sent > 0:
-    with open(FILE, "w") as f:
-        f.write(str(last))
-    print(f"Done! Sent {new_posts_sent} posts.")
-else:
-    print("No new posts.")
+print(f"Done! Sent {new_posts_sent} posts."
