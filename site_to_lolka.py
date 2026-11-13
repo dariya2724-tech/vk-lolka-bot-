@@ -1,8 +1,11 @@
-import requests
 import os
+os.system("pip install Pillow")
+import requests
 import json
 import re
 from datetime import datetime
+from PIL import Image
+from io import BytesIO
 
 WEBHOOK = os.environ["WEBHOOK_URL"]
 SITE_JSON = "https://rr4farmtrof.com/assets/data/points-preview.json"
@@ -74,34 +77,39 @@ for post in posts_to_check:
         }
 
         imgs = post.get("photos", [])
-        img_urls = []
-        for p in imgs:
+        files = {}
+        
+        for i, p in enumerate(imgs):
             img_url = BASE_URL + p if p.startswith("/") else p
-            img_urls.append(img_url)
-
-        # Первую картинку ставим в карточку
-        if img_urls:
-            payload["embeds"][0]["image"] = {"url": img_urls[0]}
+            try:
+                res_img = requests.get(img_url, timeout=10)
+                img = Image.open(BytesIO(res_img.content)).convert('RGB')
+                
+                # Обрезаем баннер снизу (если он есть)
+                w, h = img.size
+                img = img.crop((0, 0, w, int(h * 0.90))) # Оставляем 90% высоты
+                
+                output = BytesIO()
+                img.save(output, format='JPEG', quality=95)
+                output.seek(0)
+                
+                files[f"files[{i}]"] = (f"img_{i}.jpg", output, "image/jpeg")
+                
+                # Первую картинку ставим в карточку
+                if i == 0:
+                    payload["embeds"][0]["image"] = {"url": f"attachment://img_{i}.jpg"}
+            except Exception as e:
+                print(f"Error processing image {img_url}: {e}")
 
         try:
-            # Отправляем карточку
-            res = requests.post(WEBHOOK, json=payload, timeout=20)
+            if files:
+                res = requests.post(WEBHOOK, data={"payload_json": json.dumps(payload)}, files=files, timeout=30)
+            else:
+                res = requests.post(WEBHOOK, json=payload, timeout=20)
+                
             if res.status_code in (200, 204):
                 print(f"Success! Card {pid} sent.")
                 new_posts_sent += 1
-                
-                # Отправляем остальные картинки пачкой (без обработки)
-                if len(img_urls) > 1:
-                    files = {}
-                    for i, url in enumerate(img_urls[1:]):
-                        try:
-                            img_data = requests.get(url, timeout=10).content
-                            files[f"files[{i}]"] = (f"img_{i}.jpg", img_data, "image/jpeg")
-                        except:
-                            pass
-                    if files:
-                        requests.post(WEBHOOK, data={"payload_json": "{}"}, files=files, timeout=20)
-                
                 last = pid
             else:
                 print("Lolka error:", res.status_code, res.text)
