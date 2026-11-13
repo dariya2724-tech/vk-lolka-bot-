@@ -1,0 +1,38 @@
+name: VK to Lolka Bot
+
+on:
+  schedule:
+    - cron: '*/5 * * * *' # Запуск каждые 5 минут
+  workflow_dispatch: # Позволяет запускать вручную
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: pip install requests
+
+    - name: Run bot script
+      env:
+        WEBHOOK_URL: ${{ secrets.WEBHOOK_URL }}
+        VK_SERVICE_TOKEN: ${{ secrets.VK_SERVICE_TOKEN }}
+      run: python vk_to_lolka.py
+
+    - name: Save last post ID
+      run: |
+        git config --global user.name "GitHub Action"
+        git config --global user.email "action@github.com"
+        git add last_post.txt
+        git commit -m "Update last post ID" || exit 0
+        git push
