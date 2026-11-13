@@ -3,7 +3,6 @@ os.system("pip install Pillow")
 import requests
 import json
 import re
-import time
 from datetime import datetime
 from PIL import Image
 from io import BytesIO
@@ -43,9 +42,9 @@ for post in posts_to_check:
     pid = int(post.get("site_post_id"))
     
     if pid > last:
-        print(f"New post found! ID: {pid}")
+        print("New post found! ID:", pid)
         
-        # СРАЗУ записываем ID в файл перед отправкой!
+        # СРАЗУ записываем ID в файл перед отправкой
         with open(FILE, "w") as f:
             f.write(str(pid))
             
@@ -102,7 +101,7 @@ for post in posts_to_check:
                 if i == 0:
                     payload["embeds"][0]["image"] = {"url": f"attachment://img_{i}.jpg"}
             except Exception as e:
-                print(f"Error processing image {img_url}: {e}")
+                print("Error image:", e)
 
         try:
             if files:
@@ -111,14 +110,11 @@ for post in posts_to_check:
                 res = requests.post(WEBHOOK, json=payload, timeout=20)
                 
             if res.status_code in (200, 204):
-                print(f"Success! Card {pid} sent.")
+                print("Success! Card sent:", pid)
                 new_posts_sent += 1
             else:
                 print("Lolka error:", res.status_code, res.text)
         except Exception as e:
             print("Network error:", e)
-            
-        # Пауза 2 секунды между постами
-        time.sleep(2)
 
-print(f"Done! Sent {new_posts_sent} posts."
+print("Done! Sent", new_posts_sent, "posts.")
