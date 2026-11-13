@@ -41,7 +41,6 @@ def send_to_lolka(post):
 
     post_url = f"https://vk.com/wall-{post['owner_id']}_{post_id}"
 
-    # 1. Отправляем ТЕКСТОВУЮ карточку (с первой картинкой как обложкой)
     payload_text = {
         "content": f"🎣 **Новый пост в группе РР4!**\n{post_url}",
         "embeds": [{
@@ -56,16 +55,13 @@ def send_to_lolka(post):
         payload_text["embeds"][0]["image"] = {"url": image_urls[0]}
 
     try:
-        # Отправляем карточку с текстом
         res = requests.post(WEBHOOK_URL, json=payload_text)
         if res.status_code not in (200, 204):
             print(f"❌ Ошибка Lolka (текст): {res.status_code} — {res.text}")
             return False
             
-        # 2. Если картинок больше одной, отправляем их сеткой (альбомом) следом
         if len(image_urls) > 1:
             print("🖼️ Отправляем остальные картинки сеткой...")
-            # Чтобы картинки встали в сетку, отправляем их пачкой
             payload_images = {
                 "attachments": [{"url": url} for url in image_urls[1:]]
             }
@@ -112,3 +108,4 @@ def main():
         print(f"💤 Новых постов нет (последний в ВК: {post_id}, в памяти: {last_sent_id}).")
 
 if __name__ == "__main__":
+    main()
