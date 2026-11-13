@@ -110,7 +110,6 @@ if pid > last:
                 
             img = Image.open(BytesIO(img_data)).convert('RGB')
             w, h = img.size
-            # Обрезаем красный баннер
             img = img.crop((0, 0, w, int(h * 0.90)))
             
             output = BytesIO()
@@ -118,25 +117,19 @@ if pid > last:
             output.seek(0)
             
             files[f"files[{i}]"] = (f"img_{i}.jpg", output, "image/jpeg")
-            
-            if i == 0:
-                payload["embeds"][0]["image"] = {"url": f"attachment://img_{i}.jpg"}
         except Exception as e:
             print("Error image:", e)
  
     try:
-        # 1. Сначала отправляем ТЕКСТ (карточку)
+        # 1. Отправляем ТЕКСТ (карточку)
         res_text = requests.post(target_webhook, json=payload, timeout=20)
         
         if res_text.status_code not in (200, 204):
             print("LOLKA ERROR (text):", res_text.status_code, res_text.text)
         else:
-            # 2. Если есть картинки, отправляем их ВТОРЫМ сообщением
+            # 2. Отправляем КАРТИНКИ отдельным сообщением
             if files:
                 time.sleep(2) # Пауза, чтобы текст встал первым
-                # Для картинок убираем текст из payload, чтобы они шли отдельной сеткой
-                img_payload = {"content": "", "embeds": [{"image": {"url": f"attachment://{list(files.keys())[0].replace('files[', 'img_').replace(']', '')}.jpg"}}]}
-                # Проще отправить просто файлы
                 res_imgs = requests.post(target_webhook, files=files, timeout=30)
                 
                 if res_imgs.status_code not in (200, 204):
