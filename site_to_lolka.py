@@ -65,6 +65,7 @@ for post in posts_to_check:
  
         text = post.get("post_text", "")
         bait = post.get("bait", "")
+        clip = post.get("clip", "Не указана")
         
         if not bait and text:
             m = re.search(r'(Приманка|Наживка)[:\s]+([^\n]+)', text, re.IGNORECASE)
@@ -73,7 +74,7 @@ for post in posts_to_check:
         if not bait:
             bait = "См. комментарий"
  
-        desc = f"📍 **Локация:** {lake.capitalize()}\n🎯 **Точка:** `{point}`\n🐟 **Рыба:** {fish}\n🪱 **Приманка:** {bait}\n"
+        desc = f"📍 **Локация:** {lake.capitalize()}\n🎯 **Точка:** `{point}`\n🐟 **Рыба:** {fish}\n🪱 **Приманка:** {bait}\n📏 **Клипса:** {clip}\n"
         
         if text and "Комментарий" in text:
             comment = text.split('Комментарий')[-1].strip()
@@ -122,13 +123,11 @@ for post in posts_to_check:
                 print("Error image:", e)
  
         try:
-            # Отправляем ТЕКСТ
             res_text = requests.post(target_webhook, json=payload, timeout=20)
             
             if res_text.status_code not in (200, 204):
                 print("LOLKA ERROR (text):", res_text.status_code, res_text.text)
             else:
-                # Отправляем КАРТИНКИ
                 if files:
                     time.sleep(2)
                     res_imgs = requests.post(target_webhook, files=files, timeout=30)
@@ -138,7 +137,6 @@ for post in posts_to_check:
                 print("Success! Card sent:", pid)
                 new_posts_sent += 1
                 
-                # СОХРАНЯЕМ ID ТОЛЬКО ПОСЛЕ УСПЕШНОЙ ОТПРАВКИ!
                 with open(FILE, "w") as f:
                     f.write(str(pid))
                 
