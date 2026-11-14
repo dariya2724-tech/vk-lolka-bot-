@@ -32,7 +32,7 @@ if os.path.exists(FILE):
         except:
             pass
  
-posts_to_check = posts[:10]
+posts_to_check = posts[:50]
 posts_to_check.reverse()
  
 new_posts_sent = 0
